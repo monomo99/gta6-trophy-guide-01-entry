@@ -1,70 +1,85 @@
-// Leonida Ledger — hand-in program for gta6-trophy-guide-01 (Node 22,
-// standard library only).
-//
-// The guide itself is this directory's app/ folder: plain static files a
-// browser opens at app/index.html (ES modules, CSS, one JSON data file, no
-// build step), offline — it loads nothing over the network, and its trophy
-// list and guides are app/data/trophies.json. This program hands it in: it
-// copies app/ and screenshots/ from beside this file to /output and writes
-// /output/dossier.json, the summary the judge reads (your screenshots, the
-// first load's files and bytes, and your source), with the vendored make.fun
-// library. Leave vendor/makefun-frontend.ts exactly as the kit ships it:
-// the scorer requires dossier.json to be byte for byte what its own copy
-// of that library writes.
-//
-// Serve the guide locally with `node serve.ts`, then open
-// http://localhost:8080. Outside the grader's container,
-// MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Leonida Ledger v2 — hand-in program (Node 22+, standard library only).
+// Copies app/ and screenshots/ from beside this file into the output
+// directory, writes dossier.json with buildDossier from the vendored
+// make.fun frontend library, then validates the result.
+import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { buildDossier } from "./vendor/makefun-frontend.ts";
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { buildDossier } from './vendor/makefun-frontend.ts';
+const repoRoot = path.dirname(fileURLToPath(import.meta.url));
+const outDir = path.resolve(process.env.MAKEFUN_OUTPUT_DIR ?? "/output");
+const appDir = path.join(repoRoot, "app");
+const shotsDir = path.join(repoRoot, "screenshots");
+const outAppDir = path.join(outDir, "app");
+const outShotsDir = path.join(outDir, "screenshots");
+const dossierPath = path.join(outDir, "dossier.json");
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const MAX_DOSSIER_BYTES = 1572864;
 
-// Pre-flight: refuse a half-built hand-in instead of shipping it. The
-// scorer would refuse it anyway; failing here, loudly, beats a silent
-// invalid entry. Screenshots are checked by name, not just by folder:
-// the gate needs 3 or 4 of them, each a PNG or JPEG.
-const appDir = join(here, 'app');
-const shotsDir = join(here, 'screenshots');
-if (!existsSync(join(appDir, 'index.html'))) {
-  throw new Error('app/index.html is missing — the guide was not built');
-}
-if (!existsSync(join(appDir, 'data', 'trophies.json'))) {
-  throw new Error('app/data/trophies.json is missing — the trophy list was not built');
-}
-const shots = existsSync(shotsDir)
-  ? readdirSync(shotsDir).filter((f) => /\.(png|jpe?g)$/i.test(f) && statSync(join(shotsDir, f)).isFile())
-  : [];
-if (shots.length < 3 || shots.length > 4) {
-  throw new Error(`expected 3 or 4 screenshots, found ${shots.length}`);
+async function countFiles(dir: string): Promise<number> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  let n = 0;
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    n += e.isDirectory() ? await countFiles(p) : 1;
+  }
+  return n;
 }
 
-mkdirSync(out, { recursive: true });
-cpSync(appDir, join(out, 'app'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-cpSync(shotsDir, join(out, 'screenshots'), { recursive: true });
+async function main(): Promise<void> {
+  await mkdir(outDir, { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes
-// the dossier's bytes; the others refuse an entry the scorer would refuse
-// (more than 4 screenshots or one over 256 KiB; more than 993 files and
-// directories in app/ or 48 MiB of app files: app/ counts beside /output's
-// own 1000-entry cap, its screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, { text_max_bytes: 163840, screenshots: { max: 4, max_bytes: 262144 }, app_max_files: 993, app_max_bytes: 50331648 }),
-);
+  // 1. Copy the app and its screenshots into the output directory.
+  await cp(appDir, outAppDir, { recursive: true });
+  await cp(shotsDir, outShotsDir, { recursive: true });
 
-// Post-write check: the dossier must exist, parse as JSON and fit the
-// scorer's 1.5 MiB cap. A corrupt or oversized dossier is a failed hand-in,
-// so fail here instead of letting the grader discover it.
-const dossierPath = join(out, 'dossier.json');
-const dossierBytes = statSync(dossierPath).size;
-if (dossierBytes === 0 || dossierBytes > 1572864) {
-  throw new Error(`dossier.json is ${dossierBytes} bytes — expected between 1 and 1572864`);
+  // 2. Build the dossier from exactly what was handed in.
+  // buildDossier(rootDir, caps) reads rootDir/app and rootDir/screenshots
+  // and returns the dossier as bytes (a Uint8Array); write them verbatim.
+  // caps.text_max_bytes is the dossier's byte cap (1.5 MiB); it is a
+  // validation limit only and is not embedded in the dossier itself.
+  const dossier = await buildDossier(outDir, { text_max_bytes: MAX_DOSSIER_BYTES });
+  const dossierBytesRaw =
+    dossier instanceof Uint8Array
+      ? dossier
+      : Buffer.from(typeof dossier === "string" ? dossier : JSON.stringify(dossier));
+  await writeFile(dossierPath, dossierBytesRaw);
+
+  // 3. Validate the result before reporting success.
+  const parsed = JSON.parse(await readFile(dossierPath, "utf8"));
+  if (parsed === null || typeof parsed !== "object") {
+    throw new Error("dossier.json did not parse into an object");
+  }
+  const dossierBytes = (await stat(dossierPath)).size;
+  if (dossierBytes > MAX_DOSSIER_BYTES) {
+    throw new Error(`dossier.json is ${dossierBytes} bytes, over the 1572864 byte limit`);
+  }
+  const indexStat = await stat(path.join(outAppDir, "index.html"));
+  if (!indexStat.isFile() || indexStat.size === 0) {
+    throw new Error("output is missing app/index.html");
+  }
+  const trophyData = JSON.parse(await readFile(path.join(outAppDir, "data", "trophies.json"), "utf8"));
+  const trophyList = Array.isArray(trophyData) ? trophyData : trophyData.trophies;
+  if (!Array.isArray(trophyList) || trophyList.length !== 55) {
+    throw new Error(`expected 55 trophies in app/data/trophies.json, found ${Array.isArray(trophyList) ? trophyList.length : "none"}`);
+  }
+  if (trophyList.some((t: { name?: unknown; guide?: unknown }) => !t.name || !t.guide)) {
+    throw new Error("every trophy in app/data/trophies.json needs a name and a guide");
+  }
+  const shotFiles = (await readdir(outShotsDir)).filter((f) => !f.startsWith("."));
+  if (shotFiles.length < 3 || shotFiles.length > 4) {
+    throw new Error(`expected 3-4 screenshots in output, found ${shotFiles.length}`);
+  }
+  for (const f of shotFiles) {
+    const s = await stat(path.join(outShotsDir, f));
+    if (s.size > 262144) throw new Error(`screenshot ${f} is ${s.size} bytes, over the 256 KiB limit`);
+  }
+  const appFiles = await countFiles(outAppDir);
+  console.log(
+    `Leonida Ledger v2: ${appFiles} app files, ${shotFiles.length} screenshots, ` +
+    `dossier.json ${dossierBytes} bytes — OK (${path.relative(process.cwd(), outDir) || outDir})`,
+  );
 }
-JSON.parse(readFileSync(dossierPath, 'utf8'));
+
+await main();
