@@ -1,6 +1,8 @@
 // Leonida Ledger progress store.
 // Progress lives in this browser only (localStorage) and can be exported to
-// a file and imported back. Nothing here touches the network.
+// a file and imported back. Nothing here touches the network, and nothing
+// here reads the trophy list — callers pass trophies in where a helper
+// needs them, so this file stays testable on its own.
 
 export const STORE_KEY = 'leonida-ledger-v1';
 
@@ -27,8 +29,26 @@ export function loadProgress() {
   }
 }
 
+// Saving must never crash the app: a full or blocked store just means this
+// session's ticks are not kept. Returns true when the record was stored.
 export function saveProgress(progress) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(progress));
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(progress));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Wipe the record entirely (Reset button). Returns a fresh empty record so
+// the caller can keep rendering from one value.
+export function resetProgress() {
+  try {
+    localStorage.removeItem(STORE_KEY);
+  } catch {
+    // A blocked store has nothing to remove; the fresh record still applies.
+  }
+  return emptyProgress();
 }
 
 export function isEarned(progress, id) {
@@ -62,6 +82,25 @@ export function setNote(progress, id, text) {
   if (text) progress.notes[id] = text;
   else delete progress.notes[id];
   saveProgress(progress);
+}
+
+// Earned totals per grade, for the masthead line: { platinum: [got, total], … }.
+export function countEarnedByGrade(trophies, progress) {
+  const out = {};
+  for (const grade of ['platinum', 'gold', 'silver', 'bronze']) {
+    const ofGrade = trophies.filter((t) => t.grade === grade);
+    out[grade] = [ofGrade.filter((t) => isEarned(progress, t.id)).length, ofGrade.length];
+  }
+  return out;
+}
+
+// The next trophy to chase: the first unearned one in roadmap order
+// (earliest roadmap step first, then list order). Null when all are earned.
+export function nextUnearned(trophies, progress) {
+  const pending = trophies.filter((t) => !isEarned(progress, t.id));
+  if (pending.length === 0) return null;
+  pending.sort((a, b) => (a.stage ?? 99) - (b.stage ?? 99) || a.id - b.id);
+  return pending[0];
 }
 
 // Serialise progress for the export file.

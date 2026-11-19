@@ -1,7 +1,7 @@
 {
  "game": "Grand Theft Auto VI",
  "platform": "PlayStation 5",
- "list": "The official 55 trophies as PlayStation publishes them, names, descriptions and grades from Exophase and PSNProfiles (the two agree on every name, description and grade), frozen 2026-11-18. Guides are this guide's own words, built from the official descriptions and from PowerPyx's trophy guide; every guide names its sources.",
+ "list": "The official 55 trophies as PlayStation publishes them, names, descriptions and grades from Exophase and PSNProfiles (the two agree on every name, description and grade), frozen 2026-11-18. Guides are this guide's own words, built from the official descriptions and from PowerPyx's trophy guide; every guide names its sources. Five trophies carry \"unconfirmed\": true — nobody has pinned down their trigger yet, and this guide says so instead of inventing steps.",
  "sources": {
   "powerpyx": {"label": "PowerPyx — GTA 6 Trophy Guide & Roadmap", "url": "https://www.powerpyx.com/gta-6-grand-theft-auto-vi-trophy-guide-roadmap/"},
   "exophase": {"label": "Exophase — GTA 6 Trophies (PS5)", "url": "https://www.exophase.com/game/grand-theft-auto-vi-psn/trophies/"},
@@ -178,7 +178,8 @@
    "chapter": "Chapter 4",
    "guide": "Story trophy. Finish the Chapter 4 main mission Headliners. Unmissable.",
    "src": ["powerpyx", "exophase"]
-  },
+  }
+,
   {
    "id": 12,
    "name": "Hi-Jacked",
@@ -298,8 +299,7 @@
    "chapter": null,
    "guide": "Win 20 different races out of 40 unique race locations — winning the same race twice does not count. PowerPyx lists all 40 spots. Races count toward Master of None too, so fold them into your activity sweep.",
    "src": ["powerpyx", "exophase", "psnprofiles"]
-  }
-,
+  },
   {
    "id": 20,
    "name": "Baited My Tackle",
@@ -389,7 +389,8 @@
    "chapter": null,
    "guide": "Finish 8 stranger mission strands. Only some questlines count — confirmed: Kirk (Skunk Ape), Kyle, Yago, and Pilot Pete. Moses, Tyrone, Yasmani, Andy, Billy and Eddie do NOT count toward this trophy. All strands stay open after the story; the trophy tracker in the trophy list shows your count.",
    "src": ["powerpyx", "exophase", "psnprofiles"]
-  },
+  }
+,
   {
    "id": 26,
    "name": "Supply & Demand",
@@ -447,7 +448,7 @@
    "countLabel": null,
    "stage": 3,
    "chapter": "Chapter 2",
-   "guide": "Bret Vogel's hunting questline, Jason-only. After the Chapter 2 mission Coffee Break, Bret texts Jason and marks Veteran Hunted in Lummox County. His first quest gives you the Killtelligence SM-69 hunting rifle (retrievable from any Ammu-Nation weapon locker). Hunt the animals he requests and bring them back; clean one-shot kills pay more but are not required. Which exact animal pops the trophy is still unconfirmed — PowerPyx notes it. Track under Map > Activities > Target Deck (15 decks; all 15 are needed for 100%).",
+   "guide": "Bret Vogel's hunting questline, Jason-only. After the Chapter 2 mission Coffee Break, Bret texts Jason and marks Veteran Hunted in Lummox County. His first quest gives you the Killtelligence SM-69 hunting rifle (retrievable from any Ammu-Nation weapon locker). Hunt the animals he requests and bring them back; clean one-shot kills pay more but are not required. Which exact animal pops the trophy is still unconfirmed — PowerPyx notes it. Track the questline under Progress > Characters, like the other character questlines.",
    "src": ["powerpyx", "exophase"]
   },
   {
@@ -569,8 +570,7 @@
    "chapter": null,
    "guide": "Steal a large passenger plane docked at a VCIA departure terminal — it must be one connected to a boarding bridge, not the planes on the airfield. Easiest is the one at terminals E3/E4: drive through a fence, take the stairs by the boarding bridge straight into the plane, go upstairs to the cockpit, reverse to the runway and take off. The trophy pops once you are about 1 km (0.6 miles) from the airport — it is delayed, so keep flying.",
    "src": ["powerpyx", "exophase"]
-  }
-,
+  },
   {
    "id": 38,
    "name": "Challenging Tank",
@@ -600,7 +600,8 @@
    "chapter": "Chapter 3",
    "guide": "Rob a jewelry store without being detected. First finish Chapter 3's Yasmani's Jewelry Jobs — it unlocks the Snap Gun and marks jewelry robberies (green icons) on unfogged map areas. Enter through the back door with the Snap Gun (silent lockpick; kicking the door trips the alarm), find the note with the safe code in the back room, and loot the safe. Good spot: Richardson Jewelry & Diamonds in Vice City.",
    "src": ["powerpyx", "exophase"]
-  },
+  }
+,
   {
    "id": 40,
    "name": "Maximum Withdrawal",
@@ -669,6 +670,7 @@
    "hidden": true,
    "kinds": ["activities"],
    "missable": false,
+   "unconfirmed": true,
    "count": null,
    "countLabel": null,
    "stage": 3,
@@ -684,6 +686,7 @@
    "hidden": true,
    "kinds": ["activities"],
    "missable": false,
+   "unconfirmed": true,
    "count": null,
    "countLabel": null,
    "stage": 3,
@@ -744,6 +747,7 @@
    "hidden": true,
    "kinds": ["activities"],
    "missable": false,
+   "unconfirmed": true,
    "count": null,
    "countLabel": null,
    "stage": 3,
@@ -759,6 +763,7 @@
    "hidden": true,
    "kinds": ["activities"],
    "missable": false,
+   "unconfirmed": true,
    "count": null,
    "countLabel": null,
    "stage": 3,
@@ -774,6 +779,7 @@
    "hidden": true,
    "kinds": ["activities"],
    "missable": false,
+   "unconfirmed": true,
    "count": null,
    "countLabel": null,
    "stage": 3,

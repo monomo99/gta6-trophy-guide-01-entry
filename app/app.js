@@ -2,18 +2,25 @@
 // One page, four views (checklist, roadmap, missables, about). The trophy
 // list comes from data/trophies.json; progress lives in store.js. The app
 // fetches nothing else at run time, so it works with the network off.
+//
+// Spoiler rule, applied everywhere a trophy can show: while spoilers are
+// on, a hidden trophy that has not been earned yet shows nothing but the
+// words "Hidden trophy" — not its name, not its description, and not its
+// guide, counter or missable banner. The detail pane used to leak the
+// guide for masked trophies; it no longer does.
 
 import {
-  STORE_KEY,
-  emptyProgress,
   loadProgress,
   saveProgress,
+  resetProgress,
   isEarned,
   setEarned,
   getCount,
   setCount,
   getNote,
   setNote,
+  countEarnedByGrade,
+  nextUnearned,
   exportProgress,
   importProgress,
   seedDemo,
@@ -81,7 +88,7 @@ function trophyMatches(trophy) {
   if (ui.grade !== 'all' && trophy.grade !== ui.grade) return false;
   if (ui.earnedOnly && !isEarned(progress, trophy.id)) return false;
   if (ui.search) {
-    const hay = `${trophy.name} ${trophy.description} ${trophy.guide} ${trophy.chapter ?? ''}`.toLowerCase();
+    const hay = `${trophy.name} ${trophy.description} ${trophy.guide} ${trophy.chapter ?? ''} ${GRADE_LABEL[trophy.grade]}`.toLowerCase();
     if (!hay.includes(ui.search.toLowerCase())) return false;
   }
   return true;
@@ -91,15 +98,17 @@ function renderHeader() {
   const earned = trophies.filter((t) => isEarned(progress, t.id)).length;
   $('earnedCount').textContent = earned;
   $('progressBar').style.width = `${Math.round((earned / trophies.length) * 100)}%`;
-  const parts = ['platinum', 'gold', 'silver', 'bronze'].map((grade) => {
-    const total = trophies.filter((t) => t.grade === grade).length;
-    const got = trophies.filter((t) => t.grade === grade && isEarned(progress, t.id)).length;
-    return `${GRADE_LABEL[grade]} ${got}/${total}`;
-  });
-  $('gradeLine').textContent = parts.join(' · ');
+  const byGrade = countEarnedByGrade(trophies, progress);
+  $('gradeLine').textContent = ['platinum', 'gold', 'silver', 'bronze']
+    .map((grade) => `${GRADE_LABEL[grade]} ${byGrade[grade][0]}/${byGrade[grade][1]}`)
+    .join(' · ');
   $('platinumLine').textContent = earned >= 55
     ? 'Platinum earned — Vice Got a Price! You are a Leonida Legend.'
     : 'Platinum: 4/10 difficulty · about 200 hours · 1 playthrough · 0 online trophies';
+  const next = nextUnearned(trophies, progress);
+  $('nextUp').textContent = next
+    ? `Next up: ${isMasked(next) ? 'a hidden story trophy' : next.name} — ${next.stage ? `roadmap step ${next.stage}` : 'free-roam'}`
+    : 'Every trophy earned — the platinum is yours.';
 }
 
 function renderList() {
@@ -124,10 +133,20 @@ function renderList() {
     const earned = isEarned(progress, trophy.id);
     const masked = isMasked(trophy);
     const li = el('li', null, `trophy-row${earned ? ' earned' : ''}${ui.selectedId === trophy.id ? ' selected' : ''}`);
-    li.addEventListener('click', () => {
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.setAttribute('aria-label', masked ? 'Hidden trophy — select to see its guide' : `${trophy.name}, ${GRADE_LABEL[trophy.grade]}`);
+    const select = () => {
       ui.selectedId = trophy.id;
       renderList();
       renderDetail();
+    };
+    li.addEventListener('click', select);
+    li.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        select();
+      }
     });
 
     const box = document.createElement('input');
@@ -149,6 +168,7 @@ function renderList() {
     const name = el('div', null, 'trophy-name');
     name.append(document.createTextNode(masked ? 'Hidden trophy' : trophy.name));
     if (trophy.hidden && !masked) name.append(el('span', 'Hidden', 'hidden-tag'));
+    if (trophy.unconfirmed && !masked) name.append(el('span', 'Unconfirmed', 'unconfirmed-tag'));
     main.append(name);
     main.append(el('div', masked ? 'Hidden on PlayStation until earned — tick it off to reveal it.' : trophy.description, 'trophy-desc'));
     const tags = el('div', null, 'trophy-tags');
@@ -163,7 +183,7 @@ function renderList() {
     li.append(main);
 
     const right = el('div', null, 'trophy-count');
-    if (trophy.count) {
+    if (trophy.count && !masked) {
       const n = getCount(progress, trophy.id);
       right.append(el('span', `${n}/${trophy.count} ${trophy.countLabel}`, n >= trophy.count ? 'count-done' : null));
     } else if (earned) {
@@ -202,7 +222,8 @@ function renderDetail() {
     const stats = el('p');
     const missables = trophies.filter((t) => t.missable).length;
     const hidden = trophies.filter((t) => t.hidden).length;
-    stats.append(document.createTextNode(`${trophies.length} trophies · ${hidden} hidden until earned · ${missables} possibly missable · 0 online. Start with Step 1 of the roadmap, and do the Chapter 1 meditation while you still can.`));
+    const unconfirmed = trophies.filter((t) => t.unconfirmed).length;
+    stats.append(document.createTextNode(`${trophies.length} trophies · ${hidden} hidden until earned · ${missables} possibly missable · ${unconfirmed} triggers still unconfirmed · 0 online. Start with Step 1 of the roadmap, and do the Chapter 1 meditation while you still can.`));
     empty.append(stats);
     return;
   }
@@ -215,13 +236,37 @@ function renderDetail() {
   meta.append(document.createTextNode(` · ${trophy.hidden ? 'Hidden' : 'Visible'} on PlayStation`));
   if (trophy.chapter && !masked) meta.append(document.createTextNode(` · ${trophy.chapter}`));
   if (trophy.stage) meta.append(document.createTextNode(` · Roadmap step ${trophy.stage}`));
+  if (trophy.unconfirmed && !masked) meta.append(document.createTextNode(' · Trigger unconfirmed at launch'));
   meta.append(document.createTextNode(earned ? ' · Earned ✓' : ' · Not earned yet'));
   detailEl.append(meta);
+
+  // Masked trophies stop here: no guide, no counter, no missable banner,
+  // nothing that would give the hidden trophy away.
+  if (masked) {
+    const note = el('p', null, 'masked-note');
+    note.textContent = 'Spoilers are on, so this trophy stays hidden until you earn it. Tick its checkbox in the list to reveal its guide.';
+    detailEl.append(note);
+    detailEl.append(el('h3', 'Your note'));
+    const noteBox = document.createElement('textarea');
+    noteBox.className = 'note-box';
+    noteBox.placeholder = 'Your own note — where you left off, a spot that worked…';
+    noteBox.value = getNote(progress, trophy.id);
+    noteBox.addEventListener('input', () => setNote(progress, trophy.id, noteBox.value));
+    detailEl.append(noteBox);
+    return;
+  }
 
   if (trophy.missable) {
     const banner = el('div', null, 'missable-banner');
     banner.append(el('strong', '⚠ Possibly missable — '));
     banner.append(document.createTextNode('the only trophy PowerPyx flags. Do the Chapter 1 meditation before that chapter ends; whether it is required is still unconfirmed.'));
+    detailEl.append(banner);
+  }
+
+  if (trophy.unconfirmed) {
+    const banner = el('div', null, 'unconfirmed-banner');
+    banner.append(el('strong', 'Trigger unconfirmed — '));
+    banner.append(document.createTextNode('nobody has pinned down how this one pops yet. This guide says so instead of inventing steps; check back as players crack it.'));
     detailEl.append(banner);
   }
 
@@ -385,6 +430,7 @@ $('earnedOnly').addEventListener('change', (event) => {
 $('spoilerToggle').addEventListener('change', (event) => {
   progress.spoiler = event.target.checked;
   saveProgress(progress);
+  renderHeader();
   renderList();
   renderDetail();
 });
@@ -410,6 +456,19 @@ $('importFile').addEventListener('change', async (event) => {
     alert('That file is not a Leonida Ledger progress export — nothing was changed.');
   }
   event.target.value = '';
+});
+$('resetBtn').addEventListener('click', () => {
+  const earned = trophies.filter((t) => isEarned(progress, t.id)).length;
+  if (earned === 0) return;
+  if (!confirm(`Clear all progress? This erases your ${earned} earned ${earned === 1 ? 'trophy' : 'trophies'}, counters and notes from this browser. Export first if you want a backup.`)) return;
+  progress = resetProgress();
+  $('spoilerToggle').checked = false;
+  $('earnedOnly').checked = false;
+  ui.earnedOnly = false;
+  renderHeader();
+  renderList();
+  renderDetail();
+  renderRoadmapProgress();
 });
 
 // Initial state from the saved record and the query params.
